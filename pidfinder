@@ -1,55 +1,43 @@
-package org.firstinspires.ftc.teamcode.PID;
+package org.firstinspires.ftc.teamcode.testing;
 
 import com.acmerobotics.dashboard.config.Config;
 import com.acmerobotics.dashboard.telemetry.MultipleTelemetry;
 import com.acmerobotics.roadrunner.control.PIDCoefficients;
 import com.acmerobotics.roadrunner.control.PIDFController;
-import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
-import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
-import com.qualcomm.robotcore.hardware.DcMotorSimple.Direction;
+import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.acmerobotics.dashboard.FtcDashboard;
 
 import org.firstinspires.ftc.robotcore.external.Telemetry;
 
 
-import com.acmerobotics.roadrunner.control.PIDCoefficients;
-import com.acmerobotics.roadrunner.control.PIDFController;
-
-import com.acmerobotics.roadrunner.control.PIDCoefficients;
-import com.acmerobotics.roadrunner.control.PIDFController;
-
-import com.acmerobotics.dashboard.config.Config;
-import com.acmerobotics.roadrunner.geometry.Pose2d;
-import com.acmerobotics.roadrunner.geometry.Vector2d;
-import com.acmerobotics.roadrunner.trajectory.Trajectory;
-import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
-import com.qualcomm.robotcore.hardware.Servo;
 
 @Config
 @TeleOp
 
-public class pidTutorial extends LinearOpMode {
+public class pidtester extends LinearOpMode {
 
     private DcMotor linear_slide;
     double integralSum = 0;
     public static double Kp=0.025;
-    public static double Ki=0;
-    public static double Kd=0;
+    public static double Ki=0.00001;
+    public static double Kd=0.0001;
     public static double Kf=0;
-    public static double r = 0;
+    public static double r = -1000;
+
 
     public static double error = 0.3;
 
+    public static double correction;
+
     public static double controllerPower = 50; //to change how the contoller changes the slide referance point
     // for linear slide 1 INCH ~= -100 TICK ; -200 is 2 inches forward and -400 is 4 inches forward and -800 is ~ 8inches
-     double lastError;
+    double lastError;
 
     PIDFController controller; //for pid control
 
@@ -61,6 +49,7 @@ public class pidTutorial extends LinearOpMode {
         FORWARD,
         BACKWARD
     }
+    DIR what;
 
  /*   public pidTutorial(DcMotorEx m, Telemetry t){
         motortomove = m;
@@ -70,8 +59,10 @@ public class pidTutorial extends LinearOpMode {
     @Override
     public void runOpMode() throws InterruptedException {    // (check FTX Specifics for help)
         linear_slide = hardwareMap.get(DcMotor.class, "motor_lever"); // need to UPDATE the "motor" is the motor name in your configuration)
-       linear_slide.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        linear_slide.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         linear_slide.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+
+        linear_slide.setDirection(DcMotorSimple.Direction.FORWARD);
 
         coeffs = new PIDCoefficients(Kp, Ki,Kd); //for pid control
         // create the controller
@@ -82,7 +73,7 @@ public class pidTutorial extends LinearOpMode {
         // Run w/ encoders features limits the motor power to 80%; so to get more we need to run w/o encoders and w/ PID control
 
         Telemetry telemetry = new MultipleTelemetry(this.telemetry, dashboard.getTelemetry());
-       // this.setPid(Kp,Ki,Kd,Kf);
+        // this.setPid(Kp,Ki,Kd,Kf);
 
 
 
@@ -92,49 +83,65 @@ public class pidTutorial extends LinearOpMode {
 //            telemetry.update();
         //double correction = controller.update(linear_slide.getCurrentPosition()); //returns power
 
-         DIR what = DIR.FORWARD;
+        int what = 0;
+        coeffs = new PIDCoefficients(Kp, Ki,Kd); //for pid control
+        // create the controller
+        controller = new PIDFController(coeffs); //for pid control
+
+        int skip = 0;
+
+        Gamepad test = new Gamepad();
 
         waitForStart();
-   while ((opModeIsActive())){ // allowed error was set to 0.2; relaxed to 2
+        while ((opModeIsActive())){ // allowed error was set to 0.2; relaxed to 2
+
+
+
 
             switch (what) {
-                case FORWARD:
+                case 0:
 
-                   controller.setTargetPosition(r);
-                   // what = DIR.BACKWARD;
+                    controller.setTargetPosition(r);
+                    // what = DIR.BACKWARD;
+                    break;
 
-                case BACKWARD:
+                case 1:
                     controller.setTargetPosition(0);
+                    break;
             }
 
-            if (gamepad1.a){
+            if (gamepad1.a && !test.a){
                 switch (what){
-                    case FORWARD:
-                        what = DIR.BACKWARD;
-                    case BACKWARD:
-                        what = DIR.FORWARD;
+                    case 0:
+                        what = 1;
+                        break;
+                    case 1:
+                        what = 0;
+                        break;
                 }
             }
 
-           // pidslide(0);
-                //
-            double correction = 0;
-//
-       if (controller.getLastError() > 10) {
-           correction = controller.update(linear_slide.getCurrentPosition());
-
-           telemetry.addData("currentpos", linear_slide.getCurrentPosition());
-           telemetry.addData("reference", r);
-           telemetry.addData("correction", correction);
-           telemetry.addData("slide", linear_slide.getPower());
-           telemetry.update();
-//                telemetry.addData("correction",correction);
-//                telemetry.update();
-           linear_slide.setPower(correction);
-       }
+            // pidslide(0);
+            //
+            correction = controller.update(linear_slide.getCurrentPosition());;
 
 
-   }
+
+
+
+
+               linear_slide.setPower(-1 *Math.max(-1,Math.min(1,correction)));
+
+
+            telemetry.addData("currentpos", linear_slide.getCurrentPosition());
+            telemetry.addData("reference", r);
+            telemetry.addData("correction", correction);
+            telemetry.addData("slide", linear_slide.getPower());
+            telemetry.update();
+
+
+
+        }
 //            telemetry.addData("done",controller.getLastError());
 //            telemetry.update();
     }
@@ -143,19 +150,19 @@ public class pidTutorial extends LinearOpMode {
 //        controller.setTargetPosition(target);
         double correction; //returns power
         boolean skip = true;
-       while ((controller.getLastError() != error) || (skip)) {
-           skip = false;
-           correction = controller.update(linear_slide.getCurrentPosition());
+        while ((controller.getLastError() != error) || (skip)) {
+            skip = false;
+            correction = controller.update(linear_slide.getCurrentPosition());
 
-           telemetry.addData("currentpos", linear_slide.getCurrentPosition());
-           telemetry.addData("referance", r);
-           telemetry.addData("correc", correction);
-           telemetry.addData("slide", linear_slide.getPower());
-           telemetry.update();
+            telemetry.addData("currentpos", linear_slide.getCurrentPosition());
+            telemetry.addData("referance", r);
+            telemetry.addData("correc", correction);
+            telemetry.addData("slide", linear_slide.getPower());
+            telemetry.update();
 //                telemetry.addData("correction",correction);
 //                telemetry.update();
-           linear_slide.setPower(correction);
-       }
+            linear_slide.setPower(correction);
+        }
 
     }
 
