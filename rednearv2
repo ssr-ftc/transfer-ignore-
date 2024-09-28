@@ -1,4 +1,6 @@
-package org.firstinspires.ftc.teamcode.C_Testing;
+package org.firstinspires.ftc.teamcode;
+
+import static java.lang.String.*;
 
 import com.acmerobotics.dashboard.config.Config;
 import com.acmerobotics.roadrunner.control.PIDCoefficients;
@@ -11,9 +13,12 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
+import org.firstinspires.ftc.robotcontroller.external.samples.SampleRevBlinkinLedDriver;
 import org.firstinspires.ftc.robotcore.external.Telemetry;
 import org.firstinspires.ftc.teamcode.roadrunner.drive.SampleMecanumDrive;
 import org.firstinspires.ftc.teamcode.roadrunner.trajectorysequence.TrajectorySequence;
+
+import java.text.Format;
 
 
 @Config
@@ -65,11 +70,13 @@ public class rednearv2 extends LinearOpMode {
         servo_left = hardwareMap.get(Servo.class, "servo_left");
 
         // create the controller
-        armcontroller = new PIDFController(new PIDCoefficients(-0.025, 0, 0), 0, 0, 0, (x, v) -> 0.5);
+        armcontroller = new PIDFController(new PIDCoefficients(0.025, 0.00001, 0.0001));
+        arm = new CPID();
+        arm.init(hardwareMap.get(DcMotor.class, "motor_lever"), armcontroller, -1);
 
         slidecontroller = new PIDFController(new PIDCoefficients(0.025, 0, 0)); //for pid control
         slide = new CPID();
-        slide.init(hardwareMap.get(DcMotor.class, "linear_slide"), slidecontroller);
+        slide.init(hardwareMap.get(DcMotor.class, "linear_slide"), slidecontroller, 0.5);
 
         ElapsedTime timer = new ElapsedTime();
 
@@ -80,12 +87,10 @@ public class rednearv2 extends LinearOpMode {
         TrajectorySequence main = drive.trajectorySequenceBuilder(startPose)
                 // Move forward
 
-                .addTemporalMarker(() -> {
-                    targetclaw = 1200;
-                    targetslide = 1500;
-                    currentaction[0] = actions.WAIT;
-                    timer.reset();
-                    waititme = 500;
+                .addDisplacementMarker(() -> {
+                    targetclaw = -1000;
+                   // targetslide = 1500;
+
                 })
 
                 .lineToLinearHeading(new Pose2d(17, -4, 0))
@@ -93,7 +98,7 @@ public class rednearv2 extends LinearOpMode {
                 .lineToLinearHeading((new Pose2d(21, -4, 0)))
 
                 .addDisplacementMarker(() -> {
-                    targetslide = 500; //1500-1000
+                  //  targetslide = 500; //1500-1000
                     currentaction[0] = actions.CLAWOPEN;
                 })
 
@@ -124,7 +129,6 @@ public class rednearv2 extends LinearOpMode {
 //                })
 
 
-
                 .build();
 
         rightClamp();
@@ -141,6 +145,7 @@ public class rednearv2 extends LinearOpMode {
             telemetry.addData("currentaction", currentaction[0]);
 
 
+
             switch (currentaction[0]) { //this is for attahcmetns and waits so far
                 case INIT:
                     //nothing just here
@@ -149,15 +154,18 @@ public class rednearv2 extends LinearOpMode {
                     rightRelease();
                     currentaction[0] = currentaction[1];
                     currentaction[1] = actions.EMPTY;
+                    break;
 
                 case CLAWCLOSE:
                     rightClamp();
                     currentaction[0] = currentaction[1];
                     currentaction[1] = actions.EMPTY;
+                    break;
                 case ROTATE90:
                     servo_rotate.setPosition(90); //some value that turns it 90 degrees all the time
                     currentaction[0] = currentaction[1];
                     currentaction[1] = actions.EMPTY;
+                    break;
 
                 case WAIT:
 
@@ -167,6 +175,7 @@ public class rednearv2 extends LinearOpMode {
                     }
                     currentaction[0] = currentaction[1];
                     currentaction[1] = actions.EMPTY;
+                    break;
 
                 case WAITTILL:
                     if (waitill[0] == 1) {
@@ -182,63 +191,67 @@ public class rednearv2 extends LinearOpMode {
                             currentaction[1] = actions.EMPTY;
                         }
                     }
-
-
-
-                    if (!(currentaction[0] == actions.WAIT)) {
-                        drive.update();
-                        slide.update(targetslide);
-                        arm.update(targetclaw);
-                    }
-                    telemetry.update();
-
-
+                    break;
+            }//end of attachemtn state machiene
+            if (!(currentaction[0] == actions.WAIT)) {
+                drive.update();
+                telemetry.addLine(format("arm %s", arm.update(targetclaw)));
             }
+            telemetry.update();
         }
     }
-        private void rightClamp () {
-            servo_left.setPosition(0.44);
+
+    private void rightClamp () {
+        servo_left.setPosition(0.44);
+    }
+    private void rightRelease () {
+        servo_left.setPosition(0.2);
+    }
+
+    class CPID {
+
+        private double target;
+        private double correction;
+        private DcMotor selfmotor;
+        private PIDFController selfcontroller;
+
+        private  double selfpower;
+
+        public void init(DcMotor motor, PIDFController controller, double power) {
+            this.selfmotor = motor;
+            this.target = 0;
+            this.correction = 0;
+            this.selfcontroller = controller;
+            this.selfpower = power;
+
+            this.selfmotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            this.selfmotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+            this.selfmotor.setDirection(DcMotorSimple.Direction.FORWARD);
+
         }
-        private void rightRelease () {
-            servo_left.setPosition(0.2);
-        }
 
-        class CPID {
-
-            private double target;
-            private double correction;
-            private DcMotor selfmotor;
-            private PIDFController selfcontroller;
-
-            public void init(DcMotor motor, PIDFController controller) {
-                this.selfmotor = motor;
-                this.target = 0;
-                this.correction = 0;
-                this.selfcontroller = controller;
-
-            }
-
-            public void update(double t) {
+        public String update(double t) {
+            if (!(this.target == t)){
                 this.target = t;
-
                 this.selfcontroller.setTargetPosition(this.target);
-
-                if ((Math.abs(selfcontroller.getLastError()) > 10)) {
-                    this.correction = selfcontroller.update(selfmotor.getCurrentPosition());
-
-                    this.selfmotor.setPower(correction);
-                } else {
-                    this.selfmotor.setPower(0);
-                }
-
-
             }
 
-            public DcMotor getmotor() {
-                return this.selfmotor;
-            }
 
-        }//cpid class
+            this.correction = selfcontroller.update(selfmotor.getCurrentPosition());
 
-    }// whole thing class
+            this.selfmotor.setPower(-1 *Math.max(-1,Math.min(1,this.correction)));
 
+            return String.valueOf(this.correction*this.selfpower);
+
+
+
+
+        }
+
+        public DcMotor getmotor() {
+            return this.selfmotor;
+        }
+
+    }//cpid class
+
+}// whole thing class
