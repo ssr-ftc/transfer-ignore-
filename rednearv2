@@ -1,0 +1,244 @@
+package org.firstinspires.ftc.teamcode.C_Testing;
+
+import com.acmerobotics.dashboard.config.Config;
+import com.acmerobotics.roadrunner.control.PIDCoefficients;
+import com.acmerobotics.roadrunner.control.PIDFController;
+import com.acmerobotics.roadrunner.geometry.Pose2d;
+import com.acmerobotics.roadrunner.geometry.Vector2d;
+import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.util.ElapsedTime;
+
+import org.firstinspires.ftc.robotcore.external.Telemetry;
+import org.firstinspires.ftc.teamcode.roadrunner.drive.SampleMecanumDrive;
+import org.firstinspires.ftc.teamcode.roadrunner.trajectorysequence.TrajectorySequence;
+
+
+@Config
+
+@com.qualcomm.robotcore.eventloop.opmode.Autonomous(group = "drive")
+public class rednearv2 extends LinearOpMode {
+
+
+    public enum actions {
+        EMPTY,
+        INIT,
+        CLAWOPEN,
+        CLAWCLOSE,
+        ROTATE90,
+        WAIT,
+
+        WAITTILL
+    }
+
+    //aryan
+    private Servo servo_left;
+    private Servo servo_rotate;
+
+    int targetclaw;
+    int targetslide;
+
+
+    PIDFController slidecontroller; //for pid control
+    PIDFController armcontroller; //for pid control
+    CPID slide;
+    CPID arm;
+
+
+    double waititme;
+
+
+    @Override
+    public void runOpMode() throws InterruptedException {
+
+        // Creating Drivetrain
+        SampleMecanumDrive drive = new SampleMecanumDrive(hardwareMap);
+
+        final actions[] currentaction = {actions.INIT, actions.EMPTY};
+
+        final double[] waitill = {0, 0};
+
+
+        servo_rotate = hardwareMap.get(Servo.class, "servo_rotate");
+        servo_left = hardwareMap.get(Servo.class, "servo_left");
+
+        // create the controller
+        armcontroller = new PIDFController(new PIDCoefficients(-0.025, 0, 0), 0, 0, 0, (x, v) -> 0.5);
+
+        slidecontroller = new PIDFController(new PIDCoefficients(0.025, 0, 0)); //for pid control
+        slide = new CPID();
+        slide.init(hardwareMap.get(DcMotor.class, "linear_slide"), slidecontroller);
+
+        ElapsedTime timer = new ElapsedTime();
+
+
+        Pose2d startPose = new Pose2d(0, 0, 0); // starting position is 0,0,0
+        drive.setPoseEstimate(startPose);
+
+        TrajectorySequence main = drive.trajectorySequenceBuilder(startPose)
+                // Move forward
+
+                .addTemporalMarker(() -> {
+                    targetclaw = 1200;
+                    targetslide = 1500;
+                    currentaction[0] = actions.WAIT;
+                    timer.reset();
+                    waititme = 500;
+                })
+
+                .lineToLinearHeading(new Pose2d(17, -4, 0))
+
+                .lineToLinearHeading((new Pose2d(21, -4, 0)))
+
+                .addDisplacementMarker(() -> {
+                    targetslide = 500; //1500-1000
+                    currentaction[0] = actions.CLAWOPEN;
+                })
+
+//                .strafeTo(new Vector2d(17,31.5))
+//
+//                .UNSTABLE_addTemporalMarkerOffset(0.2, () -> {
+//                    targetclaw = 200;
+//                })
+//                .UNSTABLE_addTemporalMarkerOffset(0,() -> {
+//                    currentaction[0] = actions.CLAWOPEN;
+//                    currentaction[1] = actions.WAIT;
+//                    waititme = 0.3;
+//                    targetclaw = 1000;
+//                })
+//
+//                .lineToLinearHeading(new Pose2d(6,36.5,2.36))
+//
+//                .UNSTABLE_addTemporalMarkerOffset(-0.2,() -> {
+//                    targetslide = 1500;
+//                })
+//
+//                .lineToLinearHeading(new Pose2d(2,39.5,2.36))
+//
+//                .UNSTABLE_addTemporalMarkerOffset(0, () -> {
+//                    currentaction[0] = actions.CLAWOPEN;
+//                    currentaction[1] = actions.WAIT;
+//                    waititme = 0.1;
+//                })
+
+
+
+                .build();
+
+        rightClamp();
+        targetslide = 0;
+        targetclaw = 0;
+
+        waitForStart();
+
+        drive.followTrajectorySequenceAsync(main);
+
+        while (opModeIsActive() && !isStopRequested()) {
+
+            telemetry.addData("slidetarget", targetslide);
+            telemetry.addData("currentaction", currentaction[0]);
+
+
+            switch (currentaction[0]) { //this is for attahcmetns and waits so far
+                case INIT:
+                    //nothing just here
+                    telemetry.addLine("init");
+                case CLAWOPEN:
+                    rightRelease();
+                    currentaction[0] = currentaction[1];
+                    currentaction[1] = actions.EMPTY;
+
+                case CLAWCLOSE:
+                    rightClamp();
+                    currentaction[0] = currentaction[1];
+                    currentaction[1] = actions.EMPTY;
+                case ROTATE90:
+                    servo_rotate.setPosition(90); //some value that turns it 90 degrees all the time
+                    currentaction[0] = currentaction[1];
+                    currentaction[1] = actions.EMPTY;
+
+                case WAIT:
+
+                    if (timer.milliseconds() > waititme) {  // 500 ms delay
+                        currentaction[0] = currentaction[1];  // Move to the next action after waiting
+                        currentaction[1] = actions.EMPTY;  // Reset second action
+                    }
+                    currentaction[0] = currentaction[1];
+                    currentaction[1] = actions.EMPTY;
+
+                case WAITTILL:
+                    if (waitill[0] == 1) {
+                        if (waitill[1] == slide.getmotor().getCurrentPosition()) {
+                            currentaction[0] = currentaction[1];
+                            currentaction[1] = actions.EMPTY;
+                        }
+                    }
+
+                    if (waitill[0] == 2) {
+                        if (waitill[1] == arm.getmotor().getCurrentPosition()) {
+                            currentaction[0] = currentaction[1];
+                            currentaction[1] = actions.EMPTY;
+                        }
+                    }
+
+
+
+                    if (!(currentaction[0] == actions.WAIT)) {
+                        drive.update();
+                        slide.update(targetslide);
+                        arm.update(targetclaw);
+                    }
+                    telemetry.update();
+
+
+            }
+        }
+    }
+        private void rightClamp () {
+            servo_left.setPosition(0.44);
+        }
+        private void rightRelease () {
+            servo_left.setPosition(0.2);
+        }
+
+        class CPID {
+
+            private double target;
+            private double correction;
+            private DcMotor selfmotor;
+            private PIDFController selfcontroller;
+
+            public void init(DcMotor motor, PIDFController controller) {
+                this.selfmotor = motor;
+                this.target = 0;
+                this.correction = 0;
+                this.selfcontroller = controller;
+
+            }
+
+            public void update(double t) {
+                this.target = t;
+
+                this.selfcontroller.setTargetPosition(this.target);
+
+                if ((Math.abs(selfcontroller.getLastError()) > 10)) {
+                    this.correction = selfcontroller.update(selfmotor.getCurrentPosition());
+
+                    this.selfmotor.setPower(correction);
+                } else {
+                    this.selfmotor.setPower(0);
+                }
+
+
+            }
+
+            public DcMotor getmotor() {
+                return this.selfmotor;
+            }
+
+        }//cpid class
+
+    }// whole thing class
+
